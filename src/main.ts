@@ -33,7 +33,15 @@ async function bootstrap() {
             .build();
 
         const document = SwaggerModule.createDocument(app, config);
-        SwaggerModule.setup('api', app, document);
+
+        // Fix for Vercel: Use CDN for Swagger UI assets
+        SwaggerModule.setup('api', app, document, {
+            customCssUrl: 'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.15.5/swagger-ui.min.css',
+            customJs: [
+                'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.15.5/swagger-ui-bundle.js',
+                'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.15.5/swagger-ui-standalone-preset.js',
+            ],
+        });
 
         await app.init();
         cachedApp = app.getHttpAdapter().getInstance();
@@ -76,6 +84,7 @@ if (process.env.NODE_ENV !== 'production') {
             .build();
 
         const document = SwaggerModule.createDocument(app, config);
+        // Local setup doesn't strictly need CDN but it doesn't hurt
         SwaggerModule.setup('api', app, document);
 
         const port = process.env.PORT || 3000;
@@ -88,4 +97,3 @@ if (process.env.NODE_ENV !== 'production') {
         startLocal();
     }
 }
-
