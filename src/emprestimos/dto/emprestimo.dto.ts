@@ -18,17 +18,20 @@ export class CreateEmprestimoDto {
     @IsNumber()
     valor: number;
 
-    // dataEmprestimo removido - gerado automaticamente pelo sistema
-
-    @ApiProperty({ example: '2023-12-01T10:00:00Z', description: 'Data de vencimento' })
+    @ApiProperty({ example: '2023-12-31', description: 'Data de vencimento (YYYY-MM-DD)' })
     @IsNotEmpty()
     @IsDateString()
     dataVencimento: string;
 
-    @ApiPropertyOptional({ example: EmprestimoStatus.ATIVO, description: 'Status inicial do empréstimo', enum: EmprestimoStatus, default: EmprestimoStatus.ATIVO })
+    @ApiPropertyOptional({
+        description: 'Status inicial do empréstimo',
+        enum: EmprestimoStatus,
+        default: EmprestimoStatus.ATIVO,
+        example: EmprestimoStatus.ATIVO
+    })
     @IsOptional()
     @IsEnum(EmprestimoStatus)
-    status?: string;
+    status?: EmprestimoStatus;
 }
 
 export class UpdateEmprestimoDto {
@@ -37,13 +40,17 @@ export class UpdateEmprestimoDto {
     @IsNumber()
     valor?: number;
 
-    @ApiPropertyOptional({ example: '2023-12-15T10:00:00Z' })
+    @ApiPropertyOptional({ example: '2024-01-15' })
     @IsOptional()
     @IsDateString()
     dataVencimento?: string;
 
-    @ApiPropertyOptional({ example: EmprestimoStatus.PAGO, description: 'Novo status', enum: EmprestimoStatus })
+    @ApiPropertyOptional({
+        description: 'Novo status',
+        enum: EmprestimoStatus,
+        example: EmprestimoStatus.PAGO
+    })
     @IsOptional()
     @IsEnum(EmprestimoStatus)
-    status?: string;
+    status?: EmprestimoStatus;
 }

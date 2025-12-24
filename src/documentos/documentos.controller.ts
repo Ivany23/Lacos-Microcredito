@@ -1,22 +1,25 @@
 import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiTags, ApiConsumes, ApiBody, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { ApiTags, ApiConsumes, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { DocumentosService } from './documentos.service';
 import { CreateDocumentoDto, UpdateDocumentoDto } from './dto/documento.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @ApiTags('Documentos')
 @ApiBearerAuth()
-@Controller('documentos')
 @UseGuards(JwtAuthGuard)
+@Controller('documentos')
 export class DocumentosController {
     constructor(private readonly documentosService: DocumentosService) { }
 
     @Post()
-    @ApiOperation({ summary: 'Criar documento com upload de arquivo' })
+    @ApiOperation({ summary: 'Criar documento com upload de arquivo (PDF ou Imagem)' })
     @ApiConsumes('multipart/form-data')
     @UseInterceptors(FileInterceptor('arquivo'))
-    create(@Body() createDocumentoDto: CreateDocumentoDto, @UploadedFile() file: Express.Multer.File) {
+    create(
+        @UploadedFile() file: Express.Multer.File,
+        @Body() createDocumentoDto: CreateDocumentoDto
+    ) {
         if (file) {
             createDocumentoDto.arquivo = file.buffer;
         }
@@ -42,10 +45,14 @@ export class DocumentosController {
     }
 
     @Patch(':id')
-    @ApiOperation({ summary: 'Atualizar documento' })
+    @ApiOperation({ summary: 'Atualizar documento com upload opcional' })
     @ApiConsumes('multipart/form-data')
     @UseInterceptors(FileInterceptor('arquivo'))
-    update(@Param('id') id: string, @Body() updateDocumentoDto: UpdateDocumentoDto, @UploadedFile() file: Express.Multer.File) {
+    update(
+        @Param('id') id: string,
+        @UploadedFile() file: Express.Multer.File,
+        @Body() updateDocumentoDto: UpdateDocumentoDto
+    ) {
         if (file) {
             updateDocumentoDto.arquivo = file.buffer;
         }

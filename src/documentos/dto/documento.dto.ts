@@ -13,45 +13,46 @@ export enum TipoDocumento {
     CERTIFICADO_HABILITACOES = 'Certificado de Habilitacoes',
     COMPROVATIVO_RESIDENCIA = 'Comprovativo de Residencia',
     TALAO_DEPOSITO = 'Talao de Deposito',
+    DUAT = 'DUAT',
     OUTRO = 'Outro'
 }
 
 export class CreateDocumentoDto {
-    @ApiProperty({ description: 'ID do Cliente' })
+    @ApiProperty({ example: '1', description: 'ID do Cliente' })
     @IsNotEmpty()
     @IsString()
     clienteId: string;
 
     @ApiProperty({
-        example: TipoDocumento.BI,
-        description: 'Tipo de documento. Valores obrigatórios conforme constraint do banco: ' + Object.values(TipoDocumento).join(', '),
-        enum: TipoDocumento
+        description: 'Tipo de documento',
+        enum: TipoDocumento,
+        example: TipoDocumento.BI
     })
     @IsNotEmpty()
     @IsEnum(TipoDocumento)
-    tipoDocumento: string;
+    tipoDocumento: TipoDocumento;
 
-    @ApiProperty({ description: 'Número do documento (ÚNICO no sistema)' })
+    @ApiProperty({ example: '123456789XYZ', description: 'Número do documento (ÚNICO no sistema)' })
     @IsNotEmpty()
     @IsString()
     numeroDocumento: string;
 
-    @ApiPropertyOptional({ type: 'string', format: 'binary', description: 'Arquivo do documento' })
+    @ApiProperty({ type: 'string', format: 'binary', description: 'Arquivo do documento (Upload)' })
     @IsOptional()
     arquivo?: any;
 }
 
 export class UpdateDocumentoDto {
     @ApiPropertyOptional({
-        example: TipoDocumento.BI,
-        description: 'Tipo de documento. Valores permitidos: ' + Object.values(TipoDocumento).join(', '),
-        enum: TipoDocumento
+        description: 'Tipo de documento',
+        enum: TipoDocumento,
+        example: TipoDocumento.BI
     })
     @IsOptional()
     @IsEnum(TipoDocumento)
-    tipoDocumento?: string;
+    tipoDocumento?: TipoDocumento;
 
-    @ApiPropertyOptional({ description: 'Número do documento (Deve ser ÚNICO se alterado)' })
+    @ApiPropertyOptional({ example: '987654321ABC', description: 'Número do documento (Deve ser ÚNICO se alterado)' })
     @IsOptional()
     @IsString()
     numeroDocumento?: string;

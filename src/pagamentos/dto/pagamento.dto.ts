@@ -27,13 +27,14 @@ export class CreatePagamentoDto {
     @IsNumber()
     valorPago: number;
 
-    // dataPagamento removido - gerado automaticamente pelo sistema
-
-    @ApiProperty({ example: MetodoPagamento.MPESA, description: 'Método de pagamento', enum: MetodoPagamento })
+    @ApiProperty({
+        description: 'Método de pagamento',
+        enum: MetodoPagamento,
+        example: MetodoPagamento.MPESA
+    })
     @IsNotEmpty()
-    @IsString()
     @IsEnum(MetodoPagamento)
-    metodoPagamento: string;
+    metodoPagamento: MetodoPagamento;
 
     @ApiPropertyOptional({ example: '8412345678W', description: 'Referência do pagamento (ex: ID da transação)' })
     @IsOptional()
