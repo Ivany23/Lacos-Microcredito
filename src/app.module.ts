@@ -20,6 +20,7 @@ import { Testemunha } from './entities/testemunha.entity';
 import { Pagamento } from './entities/pagamento.entity';
 import { Penalizacao } from './entities/penalizacao.entity';
 import { Notificacao } from './entities/notificacao.entity';
+import { Funcionario } from './entities/funcionario.entity';
 
 import { AppController } from './app.controller';
 import { PagamentosModule } from './pagamentos/pagamentos.module';
@@ -28,6 +29,7 @@ import { PenalizacoesModule } from './penalizacoes/penalizacoes.module';
 import { TasksModule } from './tasks/tasks.module';
 import { RelatoriosModule } from './relatorios/relatorios.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { FuncionariosModule } from './funcionarios/funcionarios.module';
 
 @Module({
     imports: [
@@ -49,6 +51,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
                 Pagamento,
                 Penalizacao,
                 Notificacao,
+                Funcionario,
             ],
             synchronize: false,
             ssl: {
@@ -70,6 +73,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
         TasksModule,
         RelatoriosModule,
         DashboardModule,
+        FuncionariosModule,
     ],
     controllers: [AppController],
 })

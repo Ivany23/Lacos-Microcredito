@@ -1,5 +1,5 @@
 {
-  "name": "nestjs-api",
+  "name": "lacos-microcredito-api",
   "version": "1.0.0",
   "description": "API NestJS para gestão de clientes e empréstimos",
   "main": "dist/main.js",

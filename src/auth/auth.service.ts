@@ -6,6 +6,7 @@ import * as bcrypt from 'bcrypt';
 import { AutenticacaoCliente } from '../entities/autenticacao-cliente.entity';
 import { LoginDto } from './dto/auth.dto';
 import { CreateAutenticacaoDto, UpdateAutenticacaoDto } from './dto/autenticacao-crud.dto';
+import { FuncionariosService } from '../funcionarios/funcionarios.service';
 
 @Injectable()
 export class AuthService {
@@ -13,6 +14,7 @@ export class AuthService {
         @InjectRepository(AutenticacaoCliente)
         private autenticacaoRepository: Repository<AutenticacaoCliente>,
         private jwtService: JwtService,
+        private funcionariosService: FuncionariosService,
     ) { }
 
     async login(loginDto: LoginDto) {
@@ -63,7 +65,58 @@ export class AuthService {
         };
     }
 
-    async getProfile(userId: string) {
+    async loginFuncionario(loginDto: LoginDto) {
+        const funcionario = await this.funcionariosService.findByUsername(loginDto.username);
+
+        if (!funcionario) {
+            throw new UnauthorizedException('Credenciais inválidas');
+        }
+
+        if (funcionario.bloqueado) {
+            throw new UnauthorizedException('Conta bloqueada. Contacte o suporte.');
+        }
+
+        const isPasswordValid = await bcrypt.compare(loginDto.password, funcionario.passwordHash);
+
+        if (!isPasswordValid) {
+            await this.funcionariosService.updateTentativasLogin(loginDto.username);
+            throw new UnauthorizedException('Credenciais inválidas');
+        }
+
+        const passwordExpired = this.funcionariosService.isPasswordExpired(funcionario);
+
+        await this.funcionariosService.updateLoginStats(funcionario.funcionarioId);
+
+        const payload = {
+            username: funcionario.username,
+            sub: funcionario.funcionarioId,
+            role: funcionario.role,
+            type: 'funcionario'
+        };
+        const token = this.jwtService.sign(payload);
+
+        return {
+            access_token: token,
+            funcionarioId: funcionario.funcionarioId,
+            username: funcionario.username,
+            role: funcionario.role,
+            nome: funcionario.nome,
+            passwordExpired,
+            message: passwordExpired ? 'Sua senha expirou. Por favor, atualize-a.' : 'Login bem sucedido'
+        };
+    }
+
+    async getProfile(userId: string, type: string = 'cliente') {
+        if (type === 'funcionario') {
+            const funcionario = await this.funcionariosService.findOne(userId);
+            return {
+                username: funcionario.username,
+                nome: funcionario.nome,
+                role: funcionario.role,
+                type: 'funcionario'
+            };
+        }
+
         const auth = await this.autenticacaoRepository.findOne({
             where: { autenticacaoId: userId },
             relations: ['cliente'],
@@ -76,6 +129,7 @@ export class AuthService {
         return {
             username: auth.username,
             cliente: auth.cliente,
+            type: 'cliente'
         };
     }
 

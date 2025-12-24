@@ -8,11 +8,13 @@ import { AuthController } from './auth.controller';
 import { JwtStrategy } from './jwt.strategy';
 import { AutenticacaoCliente } from '../entities/autenticacao-cliente.entity';
 import { AuthConstants } from './constants';
+import { FuncionariosModule } from '../funcionarios/funcionarios.module';
 
 @Module({
     imports: [
         TypeOrmModule.forFeature([AutenticacaoCliente]),
         PassportModule,
+        FuncionariosModule,
         JwtModule.register({
             secret: AuthConstants.jwtSecret,
             signOptions: {

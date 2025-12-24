@@ -11,9 +11,14 @@ export class AuthController {
     constructor(private authService: AuthService) { }
 
     @Post('login')
-    @ApiOperation({ summary: 'Login do cliente' })
     async login(@Body() loginDto: LoginDto) {
         return this.authService.login(loginDto);
+    }
+
+    @Post('login/funcionario')
+    @ApiOperation({ summary: 'Login do funcionário (Admin/Gestor/Operador)' })
+    async loginFuncionario(@Body() loginDto: LoginDto) {
+        return this.authService.loginFuncionario(loginDto);
     }
 
     @UseGuards(JwtAuthGuard)
@@ -21,7 +26,7 @@ export class AuthController {
     @ApiBearerAuth()
     @ApiOperation({ summary: 'Obter perfil do usuário autenticado' })
     async getProfile(@Request() req) {
-        return this.authService.getProfile(req.user.userId);
+        return this.authService.getProfile(req.user.userId, req.user.type);
     }
 
     @Post('register')
