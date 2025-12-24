@@ -18,10 +18,14 @@ export class CreateClienteDto {
     @IsString()
     nome: string;
 
-    @ApiProperty({ example: ClienteSexo.FEMININO, description: 'Sexo do cliente', enum: ClienteSexo })
+    @ApiProperty({
+        example: ClienteSexo.FEMININO,
+        description: 'Sexo do cliente',
+        enum: ClienteSexo
+    })
     @IsNotEmpty()
     @IsEnum(ClienteSexo)
-    sexo: string;
+    sexo: ClienteSexo;
 
     @ApiProperty({ example: '+258829876543', description: 'Telefone para contato' })
     @IsNotEmpty()
@@ -33,10 +37,15 @@ export class CreateClienteDto {
     @IsEmail()
     email?: string;
 
-    @ApiPropertyOptional({ example: ClienteNacionalidade.MOCAMBICANA, description: 'Nacionalidade', enum: ClienteNacionalidade, default: ClienteNacionalidade.MOCAMBICANA })
+    @ApiPropertyOptional({
+        example: ClienteNacionalidade.MOCAMBICANA,
+        description: 'Nacionalidade',
+        enum: ClienteNacionalidade,
+        default: ClienteNacionalidade.MOCAMBICANA
+    })
     @IsOptional()
     @IsEnum(ClienteNacionalidade)
-    nacionalidade?: string;
+    nacionalidade?: ClienteNacionalidade;
 
     @ApiProperty({ example: '1985-08-20', description: 'Data de nascimento (ISO 8601)' })
     @IsNotEmpty()
@@ -50,10 +59,13 @@ export class UpdateClienteDto {
     @IsString()
     nome?: string;
 
-    @ApiPropertyOptional({ example: 'Feminino' })
+    @ApiPropertyOptional({
+        example: ClienteSexo.FEMININO,
+        enum: ClienteSexo
+    })
     @IsOptional()
-    @IsString()
-    sexo?: string;
+    @IsEnum(ClienteSexo)
+    sexo?: ClienteSexo;
 
     @ApiPropertyOptional({ example: '+258849998887' })
     @IsOptional()
@@ -65,10 +77,13 @@ export class UpdateClienteDto {
     @IsEmail()
     email?: string;
 
-    @ApiPropertyOptional({ example: 'Portuguesa' })
+    @ApiPropertyOptional({
+        example: ClienteNacionalidade.ESTRANGEIRA,
+        enum: ClienteNacionalidade
+    })
     @IsOptional()
-    @IsString()
-    nacionalidade?: string;
+    @IsEnum(ClienteNacionalidade)
+    nacionalidade?: ClienteNacionalidade;
 
     @ApiPropertyOptional({ example: '1985-08-20' })
     @IsOptional()
