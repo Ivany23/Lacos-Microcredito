@@ -29,9 +29,8 @@ export class Funcionario {
 
     @Column({
         type: 'text',
-        enum: FuncionarioRole,
     })
-    role: FuncionarioRole;
+    role: string;
 
     @CreateDateColumn({ name: 'data_criacao', type: 'timestamptz' })
     dataCriacao: Date;

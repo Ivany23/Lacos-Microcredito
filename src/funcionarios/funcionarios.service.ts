@@ -87,10 +87,13 @@ export class FuncionariosService {
      * Atualiza o timestamp de último login
      */
     async updateLoginStats(id: string) {
-        await this.funcionarioRepository.update(id, {
-            ultimoLogin: new Date(),
-            tentativasLogin: 0
-        });
+        await this.funcionarioRepository.update(
+            { funcionarioId: id }, // Critério explícito
+            {
+                ultimoLogin: new Date(),
+                tentativasLogin: 0
+            }
+        );
     }
 
     /**

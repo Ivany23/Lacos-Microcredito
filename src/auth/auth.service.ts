@@ -72,52 +72,49 @@ export class AuthService {
             throw new UnauthorizedException('Credenciais inválidas');
         }
 
-        if (funcionario.bloqueado) {
-            throw new UnauthorizedException('Conta bloqueada. Contacte o suporte.');
-        }
-
-        // Verifica se existe o hash da senha
-        if (!funcionario.passwordHash) {
-            throw new UnauthorizedException('Erro na configuração da conta. Contacte o administrador.');
-        }
-
         try {
+            if (funcionario.bloqueado) {
+                throw new UnauthorizedException('Conta bloqueada. Contacte o suporte.');
+            }
+
+            // Verifica se existe o hash da senha
+            if (!funcionario.passwordHash) {
+                throw new UnauthorizedException('Erro na configuração da conta. Contacte o administrador.');
+            }
+
             const isPasswordValid = await bcrypt.compare(loginDto.password, funcionario.passwordHash);
 
             if (!isPasswordValid) {
                 await this.funcionariosService.updateTentativasLogin(loginDto.username);
                 throw new UnauthorizedException('Credenciais inválidas');
             }
+
+            await this.funcionariosService.updateLoginStats(String(funcionario.funcionarioId));
+
+            const payload = {
+                username: funcionario.username,
+                sub: String(funcionario.funcionarioId),
+                role: funcionario.role,
+                type: 'funcionario'
+            };
+            const token = this.jwtService.sign(payload);
+
+            return {
+                access_token: token,
+                funcionarioId: String(funcionario.funcionarioId),
+                username: funcionario.username,
+                role: funcionario.role,
+                nome: funcionario.nome,
+                passwordExpired: false,
+                message: 'Login bem sucedido'
+            };
         } catch (error) {
-            console.error('Erro na validação de senha:', error);
-            // Se o erro for de Unauthorized, relança. Se for outro (ex: hash inválido), lança Unauthorized para não expor erro interno.
+            console.error('Erro no Login de Funcionário:', error);
             if (error instanceof UnauthorizedException) {
                 throw error;
             }
-            throw new UnauthorizedException('Erro ao validar credenciais. Verifique se a senha está no formato correto.');
+            throw new UnauthorizedException('Falha no processo de login. Verifique os dados ou contacte o suporte.');
         }
-
-        const passwordExpired = this.funcionariosService.isPasswordExpired(funcionario);
-
-        await this.funcionariosService.updateLoginStats(funcionario.funcionarioId);
-
-        const payload = {
-            username: funcionario.username,
-            sub: String(funcionario.funcionarioId), // Garante que o ID seja string para o JWT
-            role: funcionario.role,
-            type: 'funcionario'
-        };
-        const token = this.jwtService.sign(payload);
-
-        return {
-            access_token: token,
-            funcionarioId: String(funcionario.funcionarioId),
-            username: funcionario.username,
-            role: funcionario.role,
-            nome: funcionario.nome,
-            passwordExpired,
-            message: passwordExpired ? 'Sua senha expirou. Por favor, atualize-a.' : 'Login bem sucedido'
-        };
     }
 
     async getProfile(userId: string, type: string = 'cliente') {
