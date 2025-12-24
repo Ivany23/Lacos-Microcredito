@@ -76,6 +76,11 @@ export class AuthService {
             throw new UnauthorizedException('Conta bloqueada. Contacte o suporte.');
         }
 
+        // Verifica se existe o hash da senha
+        if (!funcionario.passwordHash) {
+            throw new UnauthorizedException('Erro na configuração da conta. Contacte o administrador.');
+        }
+
         const isPasswordValid = await bcrypt.compare(loginDto.password, funcionario.passwordHash);
 
         if (!isPasswordValid) {
@@ -89,7 +94,7 @@ export class AuthService {
 
         const payload = {
             username: funcionario.username,
-            sub: funcionario.funcionarioId,
+            sub: String(funcionario.funcionarioId), // Garante que o ID seja string para o JWT
             role: funcionario.role,
             type: 'funcionario'
         };
@@ -97,7 +102,7 @@ export class AuthService {
 
         return {
             access_token: token,
-            funcionarioId: funcionario.funcionarioId,
+            funcionarioId: String(funcionario.funcionarioId),
             username: funcionario.username,
             role: funcionario.role,
             nome: funcionario.nome,

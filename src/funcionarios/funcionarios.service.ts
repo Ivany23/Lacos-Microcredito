@@ -114,8 +114,15 @@ export class FuncionariosService {
      * Verifica se a senha expirou (6 meses)
      */
     isPasswordExpired(funcionario: Funcionario): boolean {
+        if (!funcionario || !funcionario.dataUltimaSenha) {
+            return false;
+        }
+
         const seisMesesEmMs = 6 * 30 * 24 * 60 * 60 * 1000;
-        const dataExpiracao = new Date(funcionario.dataUltimaSenha.getTime() + seisMesesEmMs);
+        // Garante que é um objeto Date, pois do banco pode vir como string
+        const dataUltimaSenha = new Date(funcionario.dataUltimaSenha);
+        const dataExpiracao = new Date(dataUltimaSenha.getTime() + seisMesesEmMs);
+
         return new Date() > dataExpiracao;
     }
 }
