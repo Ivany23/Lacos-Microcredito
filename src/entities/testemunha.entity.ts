@@ -1,4 +1,5 @@
 import { Entity, PrimaryGeneratedColumn, Column, ManyToOne, JoinColumn } from 'typeorm';
+import { Exclude } from 'class-transformer';
 import { Cliente } from './cliente.entity';
 
 @Entity('testemunhas')
@@ -20,6 +21,10 @@ export class Testemunha {
 
     @Column({ type: 'text', name: 'testemunha_documento', nullable: false })
     testemunhaDocumento: string;
+
+    @Exclude()
+    @Column({ type: 'bytea', name: 'arquivo_documento', nullable: true })
+    arquivoDocumento: Buffer;
 
     @ManyToOne(() => Cliente, cliente => cliente.testemunhas)
     @JoinColumn({ name: 'cliente_id' })

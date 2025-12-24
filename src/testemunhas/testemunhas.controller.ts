@@ -1,5 +1,6 @@
-import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { Controller, Get, Post, Body, Patch, Param, Delete, UseGuards, UseInterceptors, UploadedFile, ParseFilePipe, MaxFileSizeValidator, FileTypeValidator } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiConsumes, ApiBody } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { TestemunhasService } from './testemunhas.service';
 import { CreateTestemunhaDto, UpdateTestemunhaDto } from './dto/testemunha.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
@@ -12,9 +13,14 @@ export class TestemunhasController {
     constructor(private readonly testemunhasService: TestemunhasService) { }
 
     @Post()
-    @ApiOperation({ summary: 'Cadastrar nova testemunha' })
-    create(@Body() createTestemunhaDto: CreateTestemunhaDto) {
-        return this.testemunhasService.create(createTestemunhaDto);
+    @ApiOperation({ summary: 'Cadastrar nova testemunha com upload de documento' })
+    @ApiConsumes('multipart/form-data')
+    @UseInterceptors(FileInterceptor('arquivoDocumento'))
+    create(
+        @UploadedFile() file: Express.Multer.File,
+        @Body() createTestemunhaDto: CreateTestemunhaDto
+    ) {
+        return this.testemunhasService.create(createTestemunhaDto, file);
     }
 
     @Get()
@@ -36,9 +42,15 @@ export class TestemunhasController {
     }
 
     @Patch(':id')
-    @ApiOperation({ summary: 'Atualizar testemunha' })
-    update(@Param('id') id: string, @Body() updateTestemunhaDto: UpdateTestemunhaDto) {
-        return this.testemunhasService.update(id, updateTestemunhaDto);
+    @ApiOperation({ summary: 'Atualizar testemunha com upload opcional' })
+    @ApiConsumes('multipart/form-data')
+    @UseInterceptors(FileInterceptor('arquivoDocumento'))
+    update(
+        @Param('id') id: string,
+        @UploadedFile() file: Express.Multer.File,
+        @Body() updateTestemunhaDto: UpdateTestemunhaDto
+    ) {
+        return this.testemunhasService.update(id, updateTestemunhaDto, file);
     }
 
     @Delete(':id')

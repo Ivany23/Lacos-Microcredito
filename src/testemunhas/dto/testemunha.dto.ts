@@ -24,7 +24,7 @@ export enum GrauParentesco {
     VIZINHO = 'Vizinho'
 }
 
-export enum TestemunhaDocumento {
+export enum TestemunhaDocumentoTipo {
     BI = 'BI',
     PASSAPORTE = 'Passaporte',
     CARTA_CONDUCAO = 'Carta de Conducao',
@@ -53,15 +53,27 @@ export class CreateTestemunhaDto {
     @IsString()
     telefone: string;
 
-    @ApiProperty({ example: GrauParentesco.AMIGO, description: 'Grau de parentesco', enum: GrauParentesco })
+    @ApiProperty({
+        description: 'Grau de parentesco',
+        enum: GrauParentesco,
+        example: GrauParentesco.AMIGO
+    })
     @IsNotEmpty()
     @IsEnum(GrauParentesco)
     grauParentesco: GrauParentesco;
 
-    @ApiProperty({ example: TestemunhaDocumento.BI, description: 'Documento da testemunha', enum: TestemunhaDocumento })
+    @ApiProperty({
+        description: 'Tipo de documento da testemunha',
+        enum: TestemunhaDocumentoTipo,
+        example: TestemunhaDocumentoTipo.BI
+    })
     @IsNotEmpty()
-    @IsEnum(TestemunhaDocumento)
-    testemunhaDocumento: TestemunhaDocumento;
+    @IsEnum(TestemunhaDocumentoTipo)
+    testemunhaDocumento: TestemunhaDocumentoTipo;
+
+    @ApiProperty({ type: 'string', format: 'binary', description: 'Arquivo do documento (Upload)' })
+    @IsOptional()
+    arquivoDocumento?: any;
 }
 
 export class UpdateTestemunhaDto {
@@ -75,13 +87,23 @@ export class UpdateTestemunhaDto {
     @IsString()
     telefone?: string;
 
-    @ApiPropertyOptional({ example: GrauParentesco.PRIMO, enum: GrauParentesco })
+    @ApiPropertyOptional({
+        enum: GrauParentesco,
+        example: GrauParentesco.PRIMO
+    })
     @IsOptional()
     @IsEnum(GrauParentesco)
     grauParentesco?: GrauParentesco;
 
-    @ApiPropertyOptional({ example: TestemunhaDocumento.PASSAPORTE, enum: TestemunhaDocumento })
+    @ApiPropertyOptional({
+        enum: TestemunhaDocumentoTipo,
+        example: TestemunhaDocumentoTipo.PASSAPORTE
+    })
     @IsOptional()
-    @IsEnum(TestemunhaDocumento)
-    testemunhaDocumento?: TestemunhaDocumento;
+    @IsEnum(TestemunhaDocumentoTipo)
+    testemunhaDocumento?: TestemunhaDocumentoTipo;
+
+    @ApiPropertyOptional({ type: 'string', format: 'binary', description: 'Novo arquivo do documento (Upload)' })
+    @IsOptional()
+    arquivoDocumento?: any;
 }

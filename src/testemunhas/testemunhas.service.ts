@@ -14,7 +14,7 @@ export class TestemunhasService {
         private clienteRepository: Repository<Cliente>,
     ) { }
 
-    async create(createTestemunhaDto: CreateTestemunhaDto) {
+    async create(createTestemunhaDto: CreateTestemunhaDto, file?: Express.Multer.File) {
         // 1. Verificar se o cliente existe
         const cliente = await this.clienteRepository.findOne({
             where: { clienteId: createTestemunhaDto.clienteId }
@@ -24,7 +24,7 @@ export class TestemunhasService {
             throw new NotFoundException('Cliente não encontrado');
         }
 
-        // 2. Verificar se a testemunha tem o mesmo telefone que o cliente (Não pode ser a própria testemunha)
+        // 2. Verificar se a testemunha tem o mesmo telefone que o cliente
         if (createTestemunhaDto.telefone === cliente.telefone) {
             throw new BadRequestException('O cliente não pode ser a sua própria testemunha');
         }
@@ -38,7 +38,7 @@ export class TestemunhasService {
             throw new ConflictException('Este número de telefone já está registrado para outra testemunha');
         }
 
-        // 4. Verificar se o telefone pertence a algum outro cliente (Opcional, mas garante que a testemunha é externa)
+        // 4. Verificar se o telefone pertence a algum outro cliente
         const clienteComTelefone = await this.clienteRepository.findOne({
             where: { telefone: createTestemunhaDto.telefone }
         });
@@ -47,7 +47,11 @@ export class TestemunhasService {
             throw new BadRequestException('A testemunha não pode ser um cliente registrado no sistema');
         }
 
-        const testemunha = this.testemunhaRepository.create(createTestemunhaDto);
+        const testemunha = this.testemunhaRepository.create({
+            ...createTestemunhaDto,
+            arquivoDocumento: file ? file.buffer : null
+        });
+
         return await this.testemunhaRepository.save(testemunha);
     }
 
@@ -75,9 +79,15 @@ export class TestemunhasService {
         });
     }
 
-    async update(id: string, updateTestemunhaDto: UpdateTestemunhaDto) {
+    async update(id: string, updateTestemunhaDto: UpdateTestemunhaDto, file?: Express.Multer.File) {
         const testemunha = await this.findOne(id);
+
         Object.assign(testemunha, updateTestemunhaDto);
+
+        if (file) {
+            testemunha.arquivoDocumento = file.buffer;
+        }
+
         return await this.testemunhaRepository.save(testemunha);
     }
 
