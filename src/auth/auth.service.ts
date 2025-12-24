@@ -81,11 +81,20 @@ export class AuthService {
             throw new UnauthorizedException('Erro na configuração da conta. Contacte o administrador.');
         }
 
-        const isPasswordValid = await bcrypt.compare(loginDto.password, funcionario.passwordHash);
+        try {
+            const isPasswordValid = await bcrypt.compare(loginDto.password, funcionario.passwordHash);
 
-        if (!isPasswordValid) {
-            await this.funcionariosService.updateTentativasLogin(loginDto.username);
-            throw new UnauthorizedException('Credenciais inválidas');
+            if (!isPasswordValid) {
+                await this.funcionariosService.updateTentativasLogin(loginDto.username);
+                throw new UnauthorizedException('Credenciais inválidas');
+            }
+        } catch (error) {
+            console.error('Erro na validação de senha:', error);
+            // Se o erro for de Unauthorized, relança. Se for outro (ex: hash inválido), lança Unauthorized para não expor erro interno.
+            if (error instanceof UnauthorizedException) {
+                throw error;
+            }
+            throw new UnauthorizedException('Erro ao validar credenciais. Verifique se a senha está no formato correto.');
         }
 
         const passwordExpired = this.funcionariosService.isPasswordExpired(funcionario);
