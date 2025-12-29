@@ -27,12 +27,16 @@ async function bootstrap() {
     const config = new DocumentBuilder()
         .setTitle('API de Gestão de Clientes e Empréstimos')
         .setDescription('Documentação completa da API com Suporte a Upload e Extratos')
-        .setVersion('1.0.3') // Bumped version to force cache refresh
+        .setVersion('2.1.0') // Grande alteração de versão para garantir refresh
         .addBearerAuth()
         .addServer('https://lacos-microcredito-api.vercel.app', 'Servidor de Produção')
         .build();
 
     const document = SwaggerModule.createDocument(app, config);
+    // Força manualmente o servidor no documento para garantir que o Swagger UI não use localhost
+    document.servers = [
+        { url: 'https://lacos-microcredito-api.vercel.app', description: 'Servidor de Produção' }
+    ];
 
     // Configuração do Swagger UI
     SwaggerModule.setup('api', app, document, {
