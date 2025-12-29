@@ -28,8 +28,7 @@ async function bootstrap() {
         .setDescription('Documentação completa da API com Suporte a Upload e Extratos')
         .setVersion('1.0')
         .addBearerAuth()
-        .addServer('https://lacos-microcredito-api.vercel.app/', 'Servidor de Produção')
-        .addServer('http://localhost:3000', 'Servidor Local')
+        .addServer('https://lacos-microcredito-api.vercel.app', 'Servidor de Produção')
         .build();
 
     const document = SwaggerModule.createDocument(app, config);
