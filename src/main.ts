@@ -6,12 +6,10 @@ import { AppModule } from './app.module';
 async function bootstrap() {
     const app = await NestFactory.create(AppModule);
 
-    // Configuração robusta de CORS para aceitar qualquer origem
-    // Configuração robusta de CORS para aceitar qualquer origem
     app.enableCors({
-        origin: '*', // Permite todas as origens explicitamente
+        origin: '*',
         methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-        credentials: false, // Necessário false quando origin é *
+        credentials: false,
     });
 
     app.useGlobalPipes(
@@ -26,19 +24,15 @@ async function bootstrap() {
 
     const config = new DocumentBuilder()
         .setTitle('API de Gestão de Clientes e Empréstimos')
-        .setDescription('Documentação completa da API com Suporte a Upload e Extratos')
-        .setVersion('2.1.0') // Grande alteração de versão para garantir refresh
+        .setDescription('Documentação completa da API')
+        .setVersion('3.0.0')
         .addBearerAuth()
-        .addServer('https://lacos-microcredito-api.vercel.app', 'Servidor de Produção')
+        .addServer('https://lacos-microcredito-api.vercel.app', 'Produção')
         .build();
 
     const document = SwaggerModule.createDocument(app, config);
-    // Força manualmente o servidor no documento para garantir que o Swagger UI não use localhost
-    document.servers = [
-        { url: 'https://lacos-microcredito-api.vercel.app', description: 'Servidor de Produção' }
-    ];
+    document.servers = [{ url: 'https://lacos-microcredito-api.vercel.app' }];
 
-    // Configuração do Swagger UI
     SwaggerModule.setup('api', app, document, {
         swaggerOptions: {
             persistAuthorization: true,
@@ -52,8 +46,6 @@ async function bootstrap() {
 
     const port = process.env.PORT || 3000;
     await app.listen(port);
-    console.log(`API rodando em http://localhost:${port}`);
-    console.log(`Swagger disponível em http://localhost:${port}/api`);
 }
 
 bootstrap();
