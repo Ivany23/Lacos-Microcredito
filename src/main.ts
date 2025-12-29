@@ -10,9 +10,15 @@ async function bootstrap() {
         const app = await NestFactory.create(AppModule);
 
         app.enableCors({
-            origin: '*',
-            methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+            origin: (origin, callback) => {
+                // Allow requests with no origin (like mobile apps or curl requests)
+                if (!origin) return callback(null, true);
+                // Allow any origin
+                callback(null, true);
+            },
+            methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
             credentials: true,
+            allowedHeaders: 'Content-Type, Accept, Authorization, X-Requested-With',
         });
 
         app.useGlobalPipes(
@@ -62,9 +68,13 @@ if (process.env.NODE_ENV !== 'production') {
         const app = await NestFactory.create(AppModule);
 
         app.enableCors({
-            origin: '*',
-            methods: 'GET,HEAD,PUT,PATCH,POST,DELETE',
+            origin: (origin, callback) => {
+                if (!origin) return callback(null, true);
+                callback(null, true);
+            },
+            methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
             credentials: true,
+            allowedHeaders: 'Content-Type, Accept, Authorization, X-Requested-With',
         });
 
         app.useGlobalPipes(

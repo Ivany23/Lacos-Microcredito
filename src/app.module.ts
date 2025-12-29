@@ -53,7 +53,7 @@ import { FuncionariosModule } from './funcionarios/funcionarios.module';
                 Notificacao,
                 Funcionario,
             ],
-            synchronize: false,
+            synchronize: true,
             ssl: {
                 rejectUnauthorized: false,
             },
