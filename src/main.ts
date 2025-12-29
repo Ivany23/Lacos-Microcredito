@@ -25,7 +25,7 @@ async function bootstrap() {
     const config = new DocumentBuilder()
         .setTitle('API de Gestão de Clientes e Empréstimos')
         .setDescription('Documentação completa da API')
-        .setVersion('3.0.0')
+        .setVersion('3.1.0')
         .addBearerAuth()
         .addServer('https://lacos-microcredito-api.vercel.app', 'Produção')
         .build();
@@ -33,15 +33,11 @@ async function bootstrap() {
     const document = SwaggerModule.createDocument(app, config);
     document.servers = [{ url: 'https://lacos-microcredito-api.vercel.app' }];
 
-    SwaggerModule.setup('api', app, document, {
+    // Mudamos de 'api' para 'docs' para evitar o erro de /api/api/
+    SwaggerModule.setup('docs', app, document, {
         swaggerOptions: {
             persistAuthorization: true,
         },
-        customCssUrl: 'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.15.5/swagger-ui.min.css',
-        customJs: [
-            'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.15.5/swagger-ui-bundle.js',
-            'https://cdnjs.cloudflare.com/ajax/libs/swagger-ui/4.15.5/swagger-ui-standalone-preset.js',
-        ],
     });
 
     const port = process.env.PORT || 3000;
