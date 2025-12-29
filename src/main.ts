@@ -25,7 +25,7 @@ async function bootstrap() {
     const config = new DocumentBuilder()
         .setTitle('API de Gestão de Clientes e Empréstimos')
         .setDescription('Documentação completa da API')
-        .setVersion('3.1.0')
+        .setVersion('3.2.0')
         .addBearerAuth()
         .addServer('https://lacos-microcredito-api.vercel.app', 'Produção')
         .build();
@@ -33,11 +33,18 @@ async function bootstrap() {
     const document = SwaggerModule.createDocument(app, config);
     document.servers = [{ url: 'https://lacos-microcredito-api.vercel.app' }];
 
-    // Mudamos de 'api' para 'docs' para evitar o erro de /api/api/
+    // Usando CDN para evitar erro 404 de assets estáticos no Vercel
+    const CDN_URL = 'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.18.2';
+
     SwaggerModule.setup('docs', app, document, {
         swaggerOptions: {
             persistAuthorization: true,
         },
+        customCssUrl: `${CDN_URL}/swagger-ui.css`,
+        customJs: [
+            `${CDN_URL}/swagger-ui-bundle.js`,
+            `${CDN_URL}/swagger-ui-standalone-preset.js`,
+        ],
     });
 
     const port = process.env.PORT || 3000;
