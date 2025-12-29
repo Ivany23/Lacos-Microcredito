@@ -7,10 +7,11 @@ async function bootstrap() {
     const app = await NestFactory.create(AppModule);
 
     // Configuração robusta de CORS para aceitar qualquer origem
+    // Configuração robusta de CORS para aceitar qualquer origem
     app.enableCors({
         origin: '*', // Permite todas as origens explicitamente
         methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-        credentials: true,
+        credentials: false, // Necessário false quando origin é *
     });
 
     app.useGlobalPipes(
@@ -26,9 +27,9 @@ async function bootstrap() {
     const config = new DocumentBuilder()
         .setTitle('API de Gestão de Clientes e Empréstimos')
         .setDescription('Documentação completa da API com Suporte a Upload e Extratos')
-        .setVersion('1.0')
+        .setVersion('1.0.1') // Versão atualizada para forçar refresh
         .addBearerAuth()
-        .addServer('https://lacos-microcredito-api.vercel.app', 'Servidor de Produção')
+        .addServer('https://lacos-microcredito-api.vercel.app/', 'Servidor de Produção')
         .build();
 
     const document = SwaggerModule.createDocument(app, config);
