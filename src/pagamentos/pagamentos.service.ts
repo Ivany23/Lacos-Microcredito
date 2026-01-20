@@ -253,119 +253,151 @@ export class PagamentosService {
     }
 
     async obterCalendarioFinanceiro(emprestimoId: string) {
-        const emprestimo = await this.emprestimoRepository.findOne({
-            where: { emprestimoId }
-        });
+        try {
+            const emprestimo = await this.emprestimoRepository.findOne({
+                where: { emprestimoId }
+            });
 
-        if (!emprestimo) {
-            throw new NotFoundException('Empréstimo não encontrado');
-        }
-
-        const planos = await this.planoPagamentoDiarioRepository.find({
-            where: { emprestimoId },
-            order: { dataReferencia: 'ASC' }
-        });
-
-        const valorPrincipal = Number(emprestimo.valor);
-        const valorLucro = valorPrincipal * 0.20;
-        const valorTotalOriginal = valorPrincipal + valorLucro;
-
-        const penalizacoes = await this.penalizacaoRepository.find({
-            where: { emprestimoId }
-        });
-        const totalPenalizacoes = penalizacoes
-            .filter(p => p.status !== StatusPenalizacao.CANCELADA)
-            .reduce((sum, p) => sum + Number(p.valor), 0);
-
-        const valorTotalComPenalizacoes = valorTotalOriginal + totalPenalizacoes;
-
-        const totalJaPago = planos.reduce((sum, p) => sum + Number(p.valorPago), 0);
-        let saldoDevedor = Math.max(0, valorTotalComPenalizacoes - totalJaPago);
-
-        const calendario = [];
-        const dataInicio = new Date(emprestimo.dataEmprestimo);
-        const dataVencimento = new Date(emprestimo.dataVencimento);
-        const hoje = new Date();
-        hoje.setHours(0, 0, 0, 0);
-
-        let diasRestantes = 0;
-        let tempDate = new Date(hoje);
-        while (tempDate <= dataVencimento) {
-            diasRestantes++;
-            tempDate.setDate(tempDate.getDate() + 1);
-        }
-
-        if (diasRestantes <= 0) diasRestantes = 1;
-
-        const valorSugeridoDiario = saldoDevedor > 0 ? (saldoDevedor / diasRestantes) : 0;
-
-        let currentDate = new Date(dataInicio);
-
-        const pagamentosMap = new Map();
-        planos.forEach(p => {
-            const d = new Date(p.dataReferencia).toISOString().split('T')[0];
-            if (!pagamentosMap.has(d)) {
-                pagamentosMap.set(d, { valorPago: 0, status: p.status });
+            if (!emprestimo) {
+                throw new NotFoundException('Empréstimo não encontrado');
             }
-            const current = pagamentosMap.get(d);
-            current.valorPago += Number(p.valorPago);
-        });
 
-        while (currentDate <= dataVencimento) {
-            const dateStr = currentDate.toISOString().split('T')[0];
-            const pagouHoje = pagamentosMap.get(dateStr);
-            const isPast = currentDate < hoje;
-            const isToday = currentDate.getTime() === hoje.getTime();
+            // Validar datas essenciais
+            if (!emprestimo.dataEmprestimo || !emprestimo.dataVencimento) {
+                throw new BadRequestException('Cadastro do empréstimo incompleto (datas ausentes).');
+            }
 
-            let diaInfo = {
-                data: dateStr,
-                status: '',
-                valor: 0,
-                cor: ''
-            };
+            // Buscar TODOS os pagamentos reais (Tabela Pagamento é a fonte da verdade financeira)
+            const todosPagamentos = await this.pagamentoRepository.find({
+                where: { emprestimoId },
+                order: { dataPagamento: 'ASC' }
+            });
 
-            if (pagouHoje) {
-                diaInfo.valor = pagouHoje.valorPago;
-                diaInfo.status = 'PAGO';
-                diaInfo.cor = 'verde';
-                if (Number(pagouHoje.valorPago) === 0) {
-                    // Caso raro onde existe registro mas valor é 0
-                    diaInfo.status = isPast ? 'ATRASADO' : 'PENDENTE';
-                    diaInfo.cor = isPast ? 'vermelho' : 'cinza';
+            // Cálculos Financeiros
+            const valorPrincipal = Number(emprestimo.valor);
+            const valorLucro = valorPrincipal * 0.20;
+            const valorTotalOriginal = valorPrincipal + valorLucro;
+
+            const penalizacoes = await this.penalizacaoRepository.find({
+                where: { emprestimoId }
+            });
+            const totalPenalizacoes = penalizacoes
+                .filter(p => p.status !== StatusPenalizacao.CANCELADA)
+                .reduce((sum, p) => sum + Number(p.valor), 0);
+
+            const valorTotalComPenalizacoes = valorTotalOriginal + totalPenalizacoes;
+            const totalJaPago = todosPagamentos.reduce((sum, p) => sum + Number(p.valorPago), 0);
+            const saldoDevedor = Math.max(0, valorTotalComPenalizacoes - totalJaPago);
+
+            const calendario = [];
+
+            // Tratamento seguro de datas
+            const dataInicio = new Date(emprestimo.dataEmprestimo);
+            const dataVencimento = new Date(emprestimo.dataVencimento);
+            const hoje = new Date();
+            hoje.setHours(0, 0, 0, 0);
+
+            // Se as datas forem inválidas, retornar erro amigável ao invés de 500
+            if (isNaN(dataInicio.getTime()) || isNaN(dataVencimento.getTime())) {
+                throw new BadRequestException('Datas do empréstimo inválidas no banco de dados.');
+            }
+
+            // Calcular dias totais e restantes
+            let diasRestantes = 0;
+            let tempDate = new Date(hoje);
+            // Se hoje for antes do inicio, consideramos a partir do inicio
+            if (tempDate < dataInicio) tempDate = new Date(dataInicio);
+
+            while (tempDate <= dataVencimento) {
+                diasRestantes++;
+                tempDate.setDate(tempDate.getDate() + 1);
+            }
+            if (diasRestantes <= 0 && saldoDevedor > 0) diasRestantes = 1; // Evitar divisão por zero se venceu hoje/ontem
+
+            const valorSugeridoDiario = saldoDevedor > 0 ? (saldoDevedor / diasRestantes) : 0;
+
+            // Agrupar pagamentos por dia
+            const pagamentosMap = new Map();
+            todosPagamentos.forEach(p => {
+                const d = new Date(p.dataPagamento).toISOString().split('T')[0];
+                if (!pagamentosMap.has(d)) {
+                    pagamentosMap.set(d, { valorPago: 0 });
                 }
-            } else if (isPast) {
-                diaInfo.status = 'ATRASADO';
-                diaInfo.valor = 0;
-                diaInfo.cor = 'vermelho';
-            } else if (isToday) {
-                diaInfo.status = 'HOJE';
-                diaInfo.valor = Number(valorSugeridoDiario.toFixed(2));
-                diaInfo.cor = 'azul';
-            } else {
-                diaInfo.status = 'FUTURO';
-                diaInfo.valor = Number(valorSugeridoDiario.toFixed(2));
-                diaInfo.cor = 'cinza';
+                const current = pagamentosMap.get(d);
+                current.valorPago += Number(p.valorPago);
+            });
+
+            let currentDate = new Date(dataInicio);
+            // Limite de segurança para loop infinito (anos bissextos, erros de data, etc)
+            let safetyCounter = 0;
+            const SAFETY_LIMIT = 365 * 2;
+
+            while (currentDate <= dataVencimento && safetyCounter < SAFETY_LIMIT) {
+                safetyCounter++;
+                const dateStr = currentDate.toISOString().split('T')[0];
+                const infoPagamentoDia = pagamentosMap.get(dateStr);
+                const isPast = currentDate < hoje;
+                const isToday = currentDate.getTime() === hoje.getTime();
+
+                let diaInfo = {
+                    data: dateStr,
+                    status: '',
+                    valor: 0,
+                    cor: ''
+                };
+
+                if (infoPagamentoDia && infoPagamentoDia.valorPago > 0) {
+                    diaInfo.valor = infoPagamentoDia.valorPago;
+                    diaInfo.status = 'PAGO';
+                    diaInfo.cor = 'verde';
+                } else if (isPast) {
+                    diaInfo.status = 'SEM PAGAMENTO';
+                    diaInfo.valor = 0;
+                    diaInfo.cor = 'vermelho';
+                } else if (isToday) {
+                    diaInfo.status = 'HOJE';
+                    diaInfo.valor = Number(valorSugeridoDiario.toFixed(2));
+                    diaInfo.cor = 'azul';
+                } else {
+                    diaInfo.status = 'FUTURO';
+                    diaInfo.valor = Number(valorSugeridoDiario.toFixed(2));
+                    diaInfo.cor = 'cinza';
+                }
+
+                // Se já pagou tudo, dias futuros ficam verdes/isentos
+                if (saldoDevedor < 1 && !isPast && (!infoPagamentoDia || infoPagamentoDia.valorPago === 0)) {
+                    diaInfo.status = 'QUITADO';
+                    diaInfo.valor = 0;
+                    diaInfo.cor = 'verde-claro';
+                }
+
+                calendario.push(diaInfo);
+                currentDate.setDate(currentDate.getDate() + 1);
             }
 
-            if (saldoDevedor <= 0 && !isPast && !pagouHoje) {
-                diaInfo.status = 'ISENTO';
-                diaInfo.valor = 0;
-                diaInfo.cor = 'verde-claro';
-            }
-
-            calendario.push(diaInfo);
-            currentDate.setDate(currentDate.getDate() + 1);
+            return {
+                sucesso: true,
+                resumo: {
+                    diasRestantes: diasRestantes,
+                    saldoDevedor: Number(saldoDevedor.toFixed(2)),
+                    valorTotal: Number(valorTotalComPenalizacoes.toFixed(2)),
+                    percentualPago: ((totalJaPago / valorTotalComPenalizacoes) * 100).toFixed(1) + '%'
+                },
+                calendario
+            };
+        } catch (error) {
+            console.error("Erro ao gerar calendário:", error);
+            throw new BadRequestException("Erro ao processar calendário financeiro: " + error.message);
         }
+    }
 
-        return {
-            sucesso: true,
-            resumo: {
-                diasRestantes: diasRestantes,
-                saldoDevedor: Number(saldoDevedor.toFixed(2)),
-                valorTotal: Number(valorTotalComPenalizacoes.toFixed(2))
-            },
-            calendario
-        };
+    private gerarReferenciaAleatoria(): string {
+        const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+        let result = '';
+        for (let i = 0; i < 8; i++) {
+            result += chars.charAt(Math.floor(Math.random() * chars.length));
+        }
+        return `REF-${result}`;
     }
 
     async create(createPagamentoDto: CreatePagamentoDto) {
@@ -377,17 +409,22 @@ export class PagamentosService {
         if (!emprestimo) throw new NotFoundException('Empréstimo não encontrado');
         if (emprestimo.status === 'Pago') throw new ConflictException('Este empréstimo já consta como Pago.');
 
-        // 1. Definição dos Valores Base (Regra de 20% de lucro fixo)
+        // 1. Gerar Referência se não existir
+        if (!createPagamentoDto.referenciaPagamento) {
+            createPagamentoDto.referenciaPagamento = this.gerarReferenciaAleatoria();
+        }
+
+        // 2. Definição dos Valores Base (Regra de 20% de lucro fixo)
         const valorPrincipalBase = Number(emprestimo.valor);
         const valorLucroFixo = valorPrincipalBase * 0.20;
 
-        // 2. Buscar histórico para cálculos lógicos
+        // 3. Buscar histórico para cálculos lógicos
         const todosPagamentos = await this.pagamentoRepository.find({ where: { emprestimoId: emprestimo.emprestimoId } });
         const totalPagoAnteriormente = todosPagamentos.reduce((sum, p) => sum + Number(p.valorPago), 0);
         const valorDestePagamento = Number(createPagamentoDto.valorPago);
         const totalPagoAcumulado = totalPagoAnteriormente + valorDestePagamento;
 
-        // 3. Buscar todas as Penalizações ativas (Pendente ou Aplicada)
+        // 4. Buscar todas as Penalizações ativas (Pendente ou Aplicada)
         const penalizacoesAtivas = await this.penalizacaoRepository.find({
             where: [
                 { emprestimoId: emprestimo.emprestimoId, status: StatusPenalizacao.PENDENTE },
@@ -403,7 +440,7 @@ export class PagamentosService {
             .filter(p => p.status !== StatusPenalizacao.CANCELADA)
             .reduce((sum, p) => sum + Number(p.valor), 0);
 
-        // 4. Ordem de Aplicação Lógica (Penalizações -> Lucro -> Capital)
+        // 5. Ordem de Aplicação Lógica (Penalizações -> Lucro -> Capital)
         let valorParaAlocar = totalPagoAcumulado;
 
         // Alocação para Penalizações
@@ -420,144 +457,94 @@ export class PagamentosService {
 
         const saldoDevedorTotal = (totalPenalizacoesHistorico + valorLucroFixo + valorPrincipalBase) - totalPagoAcumulado;
 
-        // 5. Atualizar Status das Penalizações no Banco (Efetivar pagamento das multas)
-        // Usamos o saldo disponível deste pagamento específico para marcar quais multas foram liquidadas agora
-        let saldoParaMultas = valorDestePagamento;
-        // Precisamos considerar quanto das multas já foi pago anteriormente para saber por onde começar
-        let multasJaPagasAnteriormente = totalPagoAnteriormente;
-        // Na verdade, a lógica mais simples é: 
-        // Se totalPagoAcumulado cobre uma multa, ela deve estar como 'Paga'.
+        // 6. Atualizar Status das Penalizações no Banco (Efetivar pagamento das multas)
         let acumuladoParaMultas = totalPagoAcumulado;
         for (const multa of penalizacoesAtivas) {
             const valorMulta = Number(multa.valor);
             if (acumuladoParaMultas >= valorMulta) {
                 multa.status = 'Paga';
-                multa.observacoes = (multa.observacoes || '') + ` | Liquidada em ${new Date().toISOString()}`;
+                multa.observacoes = (multa.observacoes || '') + ` | Liquidada em ${new Date().toISOString()} via Pagamento Normal`;
                 await this.penalizacaoRepository.save(multa);
                 acumuladoParaMultas -= valorMulta;
-            } else {
-                // Multa parcialmente paga ou não paga - o sistema atual não suporta status 'Parcial'
-                // Mas ela permanece como Pendente/Aplicada
-                break;
             }
         }
 
-        // 6. Registrar o Novo Pagamento (data gerada automaticamente pelo sistema)
+        // 7. Registrar o Novo Pagamento
         const novoPagamento = this.pagamentoRepository.create({
             ...createPagamentoDto,
-            dataPagamento: new Date(), // Data/hora atual do sistema
+            dataPagamento: new Date(),
         });
         await this.pagamentoRepository.save(novoPagamento);
 
-        // 7. Determinar Novo Status do Empréstimo (Validação Rigorosa)
+        // --- INTEGRAÇÃO: Sincronizar com Plano Diário ---
+        const planoDiarioSync = this.planoPagamentoDiarioRepository.create({
+            emprestimoId: emprestimo.emprestimoId,
+            dataReferencia: new Date(),
+            valorPrevisto: 0,
+            valorPago: valorDestePagamento,
+            status: 'Pago',
+            dataCalculo: new Date()
+        });
+        await this.planoPagamentoDiarioRepository.save(planoDiarioSync);
+        // ------------------------------------------------
+
+        // 8. Determinar Novo Status do Empréstimo
         let novoStatus = 'Ativo';
         const hoje = new Date();
-        const temAtraso = emprestimo.dataVencimento < hoje;
-        const temMultasPendentes = await this.penalizacaoRepository.count({
-            where: [
-                { emprestimoId: emprestimo.emprestimoId, status: StatusPenalizacao.PENDENTE },
-                { emprestimoId: emprestimo.emprestimoId, status: StatusPenalizacao.APLICADA }
-            ]
-        });
+        const temAtraso = new Date(emprestimo.dataVencimento) < hoje;
+        const temMultasPendentes = penalizacoesAtivas.some(p => p.status !== 'Paga');
 
-        // "Pago → somente se não existir qualquer valor pendente"
-        // Tolerância de 0.01 para arredondamentos
-        if (saldoDevedorTotal <= 0.01 && temMultasPendentes === 0) {
+        if (saldoDevedorTotal <= 1) {
             novoStatus = 'Pago';
-        }
-        // "Inadimplente → se existir atraso ou penalizações"
-        else if (temAtraso || temMultasPendentes > 0) {
+        } else if (temAtraso || temMultasPendentes) {
             novoStatus = 'Inadimplente';
-        }
-        // "Ativo → se ainda existir saldo, mas dentro do prazo"
-        else {
-            novoStatus = 'Ativo';
         }
 
         emprestimo.status = novoStatus;
         await this.emprestimoRepository.save(emprestimo);
 
-        // 8. Calcular dias de atraso totais
-        const diasAtrasoTotal = penalizacoesAtivas.length > 0
-            ? Math.max(...penalizacoesAtivas.map(p => Number(p.diasAtraso) || 0))
-            : 0;
-
-        // 9. Notificações (Enviadas apenas após validação completa)
+        // 9. Notificações
         await this.notificacoesService.create({
             clienteId: emprestimo.clienteId,
             tipo: TipoNotificacao.CONFIRMACAO_PAGAMENTO,
             mensagem: novoStatus === 'Pago'
-                ? `Empréstimo #${emprestimo.emprestimoId} QUITADO com sucesso!`
-                : `Recebemos seu pagamento de ${valorDestePagamento}. Saldo restante: ${saldoDevedorTotal.toFixed(2)}.`,
+                ? `Empréstimo #${emprestimo.emprestimoId} QUITADO (Via Pagamento Normal)!`
+                : `Recebemos seu pagamento de ${valorDestePagamento}. Saldo: ${saldoDevedorTotal.toFixed(2)}.`,
             status: 'Pendente'
         });
 
-        // 10. Resposta Profissional Completa
-        const valorTotalEmprestimo = valorPrincipalBase + valorLucroFixo;
-        const valorTotalComPenalizacoes = valorTotalEmprestimo + totalPenalizacoesHistorico;
+        // 10. Calcular dias de atraso totais e resumo
+        const diasAtrasoTotal = penalizacoesAtivas.length > 0
+            ? Math.max(...penalizacoesAtivas.map(p => Number(p.diasAtraso) || 0))
+            : 0;
+
         const penalizacoesPendentesValor = totalPenalizacoesHistorico - totalAlocadoPenalizacoes;
 
         return {
             sucesso: true,
-            mensagem: novoStatus === 'Pago'
-                ? '✅ Empréstimo totalmente liquidado!'
-                : '✅ Pagamento processado com sucesso.',
-
-            // Dados do Pagamento
+            mensagem: novoStatus === 'Pago' ? '✅ Quitado!' : '✅ Pagamento registrado.',
             pagamento: {
                 id: novoPagamento.pagamentoId,
                 valorPago: Number(valorDestePagamento).toFixed(2),
                 dataPagamento: novoPagamento.dataPagamento,
                 metodoPagamento: createPagamentoDto.metodoPagamento
             },
-
-            // Resumo do Empréstimo
             emprestimo: {
                 id: emprestimo.emprestimoId,
                 clienteId: emprestimo.clienteId,
                 status: novoStatus,
                 dataVencimento: emprestimo.dataVencimento
             },
-
-            // Resumo de Penalizações
-            penalizacoes: {
-                diasAtraso: diasAtrasoTotal,
-                quantidadePenalizacoes: todasPenalizacoes.filter(p => p.status !== StatusPenalizacao.CANCELADA).length,
-                valorTotalPenalizacoes: Number(totalPenalizacoesHistorico).toFixed(2),
-                penalizacoesPagas: Number(totalAlocadoPenalizacoes).toFixed(2),
-                penalizacoesPendentes: Number(Math.max(0, penalizacoesPendentesValor)).toFixed(2)
-            },
-
+            saldoDevedor: Number(saldoDevedorTotal).toFixed(2),
             // Resumo Financeiro Detalhado
             resumoFinanceiro: {
-                // Valores Base
                 valorPrincipal: Number(valorPrincipalBase).toFixed(2),
                 lucro20Porcento: Number(valorLucroFixo).toFixed(2),
-                valorTotalEmprestimo: Number(valorTotalEmprestimo).toFixed(2),
-
-                // Com Penalizações
+                valorTotalEmprestimo: Number(valorPrincipalBase + valorLucroFixo).toFixed(2),
                 totalPenalizacoes: Number(totalPenalizacoesHistorico).toFixed(2),
-                valorTotalDevido: Number(valorTotalComPenalizacoes).toFixed(2),
-
-                // Pagamentos
+                valorTotalDevido: Number(totalPenalizacoesHistorico + valorLucroFixo + valorPrincipalBase).toFixed(2),
                 totalPagoAcumulado: Number(totalPagoAcumulado).toFixed(2),
-
-                // Saldo
                 saldoDevedor: Number(Math.max(0, saldoDevedorTotal)).toFixed(2)
-            },
-
-            // Alocação do Pagamento (Ordem: Penalizações → Lucro → Principal)
-            alocacaoPagamento: {
-                alocadoPenalizacoes: Number(totalAlocadoPenalizacoes).toFixed(2),
-                alocadoLucro: Number(totalAlocadoLucro).toFixed(2),
-                alocadoPrincipal: Number(totalAlocadoPrincipal).toFixed(2)
-            },
-
-            // Saldos Pendentes por Categoria
-            saldosPendentes: {
-                principalPendente: Number(Math.max(0, valorPrincipalBase - totalAlocadoPrincipal)).toFixed(2),
-                lucroPendente: Number(Math.max(0, valorLucroFixo - totalAlocadoLucro)).toFixed(2),
-                penalizacoesPendentes: Number(Math.max(0, penalizacoesPendentesValor)).toFixed(2)
             }
         };
     }
