@@ -29,6 +29,12 @@ export class ClientesController {
         return this.clientesService.findOne(id);
     }
 
+    @Get(':id/dashboard')
+    @ApiOperation({ summary: 'Obter dashboard financeiro e estatísticas do cliente' })
+    getDashboard(@Param('id') id: string) {
+        return this.clientesService.getClientDashboard(id);
+    }
+
     @Patch(':id')
     @ApiOperation({ summary: 'Atualizar dados do cliente' })
     update(@Param('id') id: string, @Body() updateClienteDto: UpdateClienteDto) {

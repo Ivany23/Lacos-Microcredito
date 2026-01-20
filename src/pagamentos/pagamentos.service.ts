@@ -1,10 +1,12 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, Between } from 'typeorm';
 import { Pagamento } from '../entities/pagamento.entity';
 import { CreatePagamentoDto } from './dto/pagamento.dto';
+import { RegistrarPagamentoDiarioDto } from './dto/pagamento-diario.dto';
 import { Emprestimo } from '../entities/emprestimo.entity';
 import { Penalizacao } from '../entities/penalizacao.entity';
+import { PlanoPagamentoDiario } from '../entities/plano-pagamento-diario.entity';
 import { NotificacoesService } from '../notificacoes/notificacoes.service';
 import { TipoNotificacao } from '../notificacoes/dto/notificacao.dto';
 import { StatusPenalizacao } from '../penalizacoes/dto/penalizacao.dto';
@@ -18,8 +20,237 @@ export class PagamentosService {
         private emprestimoRepository: Repository<Emprestimo>,
         @InjectRepository(Penalizacao)
         private penalizacaoRepository: Repository<Penalizacao>,
+        @InjectRepository(PlanoPagamentoDiario)
+        private planoPagamentoDiarioRepository: Repository<PlanoPagamentoDiario>,
         private notificacoesService: NotificacoesService,
     ) { }
+
+    /**
+     * ========================================================================
+     * PAGAMENTO DIÁRIO COM RECALCULAÇÃO AUTOMÁTICA
+     * ========================================================================
+     * Sistema inteligente que:
+     * 1. Verifica quanto já foi pago
+     * 2. Calcula quantos dias faltam até o vencimento
+     * 3. Se o cliente falhou dias, recalcula o valor diário restante
+     * 4. Garante que o total seja pago até a data de vencimento
+     */
+    async registrarPagamentoDiario(dto: RegistrarPagamentoDiarioDto) {
+        // 1. Validar Empréstimo
+        const emprestimo = await this.emprestimoRepository.findOne({
+            where: { emprestimoId: dto.emprestimoId }
+        });
+
+        if (!emprestimo) {
+            throw new NotFoundException('Empréstimo não encontrado');
+        }
+
+        if (emprestimo.status === 'Pago') {
+            throw new ConflictException('Este empréstimo já foi totalmente pago');
+        }
+
+        // 2. Calcular Valores Base (Principal + 20% Lucro)
+        const valorPrincipal = Number(emprestimo.valor);
+        const valorLucro = valorPrincipal * 0.20;
+        const valorTotalEmprestimo = valorPrincipal + valorLucro;
+
+        // 3. Buscar Penalizações Ativas
+        const penalizacoes = await this.penalizacaoRepository.find({
+            where: [
+                { emprestimoId: emprestimo.emprestimoId, status: StatusPenalizacao.PENDENTE },
+                { emprestimoId: emprestimo.emprestimoId, status: StatusPenalizacao.APLICADA }
+            ]
+        });
+        const totalPenalizacoes = penalizacoes.reduce((sum, p) => sum + Number(p.valor), 0);
+        const valorTotalComPenalizacoes = valorTotalEmprestimo + totalPenalizacoes;
+
+        // 4. Calcular Total Já Pago (Histórico)
+        const planosPagos = await this.planoPagamentoDiarioRepository.find({
+            where: { emprestimoId: emprestimo.emprestimoId }
+        });
+        const totalJaPago = planosPagos.reduce((sum, p) => sum + Number(p.valorPago), 0);
+
+        // 5. Calcular Saldo Devedor Atual
+        const saldoDevedor = valorTotalComPenalizacoes - totalJaPago;
+
+        if (saldoDevedor <= 0) {
+            throw new ConflictException('Empréstimo já está totalmente pago');
+        }
+
+        // 6. Calcular Dias Restantes até Vencimento
+        const hoje = new Date(dto.dataPagamento);
+        const dataVencimento = new Date(emprestimo.dataVencimento);
+        const diasRestantes = Math.ceil((dataVencimento.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
+
+        if (diasRestantes < 0) {
+            throw new BadRequestException('A data de vencimento já passou. Use o sistema de pagamento regular.');
+        }
+
+        if (diasRestantes === 0) {
+            throw new BadRequestException('Hoje é o último dia. O valor total deve ser pago.');
+        }
+
+        // 7. RECALCULAR VALOR DIÁRIO (Inteligência do Sistema)
+        // Se o cliente falhou dias, o sistema redistribui o saldo pelos dias restantes
+        const valorDiarioRecalculado = saldoDevedor / diasRestantes;
+
+        // 8. Validar Valor Pago
+        const valorPago = Number(dto.valorPago);
+
+        // Tolerância de 1 MZN para variações de arredondamento
+        if (valorPago < (valorDiarioRecalculado - 1)) {
+            return {
+                sucesso: false,
+                erro: 'VALOR_INSUFICIENTE',
+                mensagem: `Valor insuficiente. O valor diário recalculado é ${valorDiarioRecalculado.toFixed(2)} MZN`,
+                detalhes: {
+                    valorMinimoDiario: Number(valorDiarioRecalculado.toFixed(2)),
+                    valorPagoRecebido: valorPago,
+                    saldoDevedor: Number(saldoDevedor.toFixed(2)),
+                    diasRestantes,
+                    explicacao: diasRestantes < this.calcularDiasTotais(emprestimo)
+                        ? 'O valor diário aumentou porque você pulou alguns dias de pagamento'
+                        : 'Valor diário padrão'
+                }
+            };
+        }
+
+        // 9. Registrar Pagamento no Plano Diário
+        const novoPlanoPagamento = this.planoPagamentoDiarioRepository.create({
+            emprestimoId: emprestimo.emprestimoId,
+            dataReferencia: hoje,
+            valorPrevisto: valorDiarioRecalculado,
+            valorPago: valorPago,
+            status: 'Pago',
+            dataCalculo: new Date()
+        });
+        await this.planoPagamentoDiarioRepository.save(novoPlanoPagamento);
+
+        // 10. Registrar no Sistema de Pagamentos Principal
+        const pagamentoGeral = this.pagamentoRepository.create({
+            emprestimoId: emprestimo.emprestimoId,
+            clienteId: emprestimo.clienteId,
+            valorPago: valorPago,
+            dataPagamento: hoje,
+            metodoPagamento: dto.metodoPagamento || 'Pagamento Diário',
+            referenciaPagamento: dto.referenciaPagamento || `DIARIO-${Date.now()}`
+        });
+        await this.pagamentoRepository.save(pagamentoGeral);
+
+        // 11. Atualizar Saldo e Verificar Status
+        const novoSaldoDevedor = saldoDevedor - valorPago;
+        const emprestimoQuitado = novoSaldoDevedor <= 1; // Tolerância de 1 MZN
+
+        if (emprestimoQuitado) {
+            emprestimo.status = 'Pago';
+            await this.emprestimoRepository.save(emprestimo);
+
+            // Notificar Quitação
+            await this.notificacoesService.create({
+                clienteId: emprestimo.clienteId,
+                tipo: TipoNotificacao.CONFIRMACAO_PAGAMENTO,
+                mensagem: `🎉 Parabéns! Empréstimo #${emprestimo.emprestimoId} totalmente quitado!`,
+                status: 'Pendente'
+            });
+        } else {
+            // Notificar Pagamento Diário
+            await this.notificacoesService.create({
+                clienteId: emprestimo.clienteId,
+                tipo: TipoNotificacao.CONFIRMACAO_PAGAMENTO,
+                mensagem: `Pagamento diário de ${valorPago.toFixed(2)} MZN recebido. Saldo restante: ${novoSaldoDevedor.toFixed(2)} MZN`,
+                status: 'Pendente'
+            });
+        }
+
+        // 12. Recalcular Plano para Dias Futuros
+        const diasFuturosRestantes = diasRestantes - 1;
+        const novoValorDiario = diasFuturosRestantes > 0 ? novoSaldoDevedor / diasFuturosRestantes : 0;
+
+        return {
+            sucesso: true,
+            mensagem: emprestimoQuitado
+                ? '✅ Empréstimo totalmente quitado!'
+                : '✅ Pagamento diário registrado com sucesso',
+
+            pagamento: {
+                id: novoPlanoPagamento.planoId,
+                data: hoje,
+                valorPago: Number(valorPago.toFixed(2)),
+                valorPrevisto: Number(valorDiarioRecalculado.toFixed(2))
+            },
+
+            situacaoEmprestimo: {
+                status: emprestimo.status,
+                valorTotalEmprestimo: Number(valorTotalComPenalizacoes.toFixed(2)),
+                totalJaPago: Number((totalJaPago + valorPago).toFixed(2)),
+                saldoDevedor: Number(Math.max(0, novoSaldoDevedor).toFixed(2)),
+                quitado: emprestimoQuitado
+            },
+
+            proximosPagamentos: emprestimoQuitado ? null : {
+                diasRestantes: diasFuturosRestantes,
+                valorDiarioRecalculado: Number(novoValorDiario.toFixed(2)),
+                dataVencimento: dataVencimento.toISOString().split('T')[0],
+                observacao: diasFuturosRestantes < this.calcularDiasTotais(emprestimo)
+                    ? '⚠️ Valor diário aumentou devido a dias não pagos anteriormente'
+                    : '✅ Pagamento em dia'
+            }
+        };
+    }
+
+    /**
+     * Calcular total de dias do empréstimo (da data de início até vencimento)
+     */
+    private calcularDiasTotais(emprestimo: Emprestimo): number {
+        const dataInicio = new Date(emprestimo.dataEmprestimo);
+        const dataVencimento = new Date(emprestimo.dataVencimento);
+        return Math.ceil((dataVencimento.getTime() - dataInicio.getTime()) / (1000 * 60 * 60 * 24));
+    }
+
+    /**
+     * Obter histórico de pagamentos diários de um empréstimo
+     */
+    async obterHistoricoPagamentosDiarios(emprestimoId: string) {
+        const emprestimo = await this.emprestimoRepository.findOne({
+            where: { emprestimoId }
+        });
+
+        if (!emprestimo) {
+            throw new NotFoundException('Empréstimo não encontrado');
+        }
+
+        const planos = await this.planoPagamentoDiarioRepository.find({
+            where: { emprestimoId },
+            order: { dataReferencia: 'ASC' }
+        });
+
+        const totalPago = planos.reduce((sum, p) => sum + Number(p.valorPago), 0);
+        const valorPrincipal = Number(emprestimo.valor);
+        const valorTotal = valorPrincipal * 1.20;
+
+        return {
+            sucesso: true,
+            emprestimo: {
+                id: emprestimo.emprestimoId,
+                valorPrincipal: Number(valorPrincipal.toFixed(2)),
+                valorTotal: Number(valorTotal.toFixed(2)),
+                dataInicio: emprestimo.dataEmprestimo,
+                dataVencimento: emprestimo.dataVencimento,
+                status: emprestimo.status
+            },
+            resumo: {
+                totalDias: planos.length,
+                totalPago: Number(totalPago.toFixed(2)),
+                saldoDevedor: Number(Math.max(0, valorTotal - totalPago).toFixed(2))
+            },
+            historico: planos.map(p => ({
+                data: p.dataReferencia,
+                valorPrevisto: Number(p.valorPrevisto),
+                valorPago: Number(p.valorPago),
+                status: p.status
+            }))
+        };
+    }
 
     async create(createPagamentoDto: CreatePagamentoDto) {
         const emprestimo = await this.emprestimoRepository.findOne({
