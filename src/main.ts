@@ -25,7 +25,7 @@ async function bootstrap() {
     const config = new DocumentBuilder()
         .setTitle('API de Gestão de Clientes e Empréstimos')
         .setDescription('Documentação completa da API')
-        .setVersion('3.2.0')
+        .setVersion('3.3.0')
         .addBearerAuth()
         .addServer('https://lacos-microcredito-api.vercel.app', 'Produção')
         .build();
@@ -36,7 +36,7 @@ async function bootstrap() {
     // Usando CDN para evitar erro 404 de assets estáticos no Vercel
     const CDN_URL = 'https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.18.2';
 
-    SwaggerModule.setup('docs', app, document, {
+    SwaggerModule.setup('api', app, document, {
         swaggerOptions: {
             persistAuthorization: true,
         },
