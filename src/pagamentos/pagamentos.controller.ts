@@ -64,6 +64,19 @@ Sistema inteligente de pagamento diário que:
         return this.pagamentosService.obterHistoricoPagamentosDiarios(emprestimoId);
     }
 
+    @Get('calendario/:emprestimoId')
+    @ApiOperation({
+        summary: 'Calendário Financeiro Inteligente',
+        description: 'Gera um calendário completo dia-a-dia com status de pagamentos passados e projeção futura recalculada.'
+    })
+    @ApiResponse({
+        status: 200,
+        description: 'Calendário gerado com sucesso.',
+    })
+    obterCalendarioFinanceiro(@Param('emprestimoId') emprestimoId: string) {
+        return this.pagamentosService.obterCalendarioFinanceiro(emprestimoId);
+    }
+
     @Get()
     @ApiOperation({ summary: 'Listar todos os pagamentos (Relatório Geral)' })
     findAll() {

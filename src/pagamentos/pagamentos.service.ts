@@ -252,6 +252,122 @@ export class PagamentosService {
         };
     }
 
+    async obterCalendarioFinanceiro(emprestimoId: string) {
+        const emprestimo = await this.emprestimoRepository.findOne({
+            where: { emprestimoId }
+        });
+
+        if (!emprestimo) {
+            throw new NotFoundException('Empréstimo não encontrado');
+        }
+
+        const planos = await this.planoPagamentoDiarioRepository.find({
+            where: { emprestimoId },
+            order: { dataReferencia: 'ASC' }
+        });
+
+        const valorPrincipal = Number(emprestimo.valor);
+        const valorLucro = valorPrincipal * 0.20;
+        const valorTotalOriginal = valorPrincipal + valorLucro;
+
+        const penalizacoes = await this.penalizacaoRepository.find({
+            where: { emprestimoId }
+        });
+        const totalPenalizacoes = penalizacoes
+            .filter(p => p.status !== StatusPenalizacao.CANCELADA)
+            .reduce((sum, p) => sum + Number(p.valor), 0);
+
+        const valorTotalComPenalizacoes = valorTotalOriginal + totalPenalizacoes;
+
+        const totalJaPago = planos.reduce((sum, p) => sum + Number(p.valorPago), 0);
+        let saldoDevedor = Math.max(0, valorTotalComPenalizacoes - totalJaPago);
+
+        const calendario = [];
+        const dataInicio = new Date(emprestimo.dataEmprestimo);
+        const dataVencimento = new Date(emprestimo.dataVencimento);
+        const hoje = new Date();
+        hoje.setHours(0, 0, 0, 0);
+
+        let diasRestantes = 0;
+        let tempDate = new Date(hoje);
+        while (tempDate <= dataVencimento) {
+            diasRestantes++;
+            tempDate.setDate(tempDate.getDate() + 1);
+        }
+
+        if (diasRestantes <= 0) diasRestantes = 1;
+
+        const valorSugeridoDiario = saldoDevedor > 0 ? (saldoDevedor / diasRestantes) : 0;
+
+        let currentDate = new Date(dataInicio);
+
+        const pagamentosMap = new Map();
+        planos.forEach(p => {
+            const d = new Date(p.dataReferencia).toISOString().split('T')[0];
+            if (!pagamentosMap.has(d)) {
+                pagamentosMap.set(d, { valorPago: 0, status: p.status });
+            }
+            const current = pagamentosMap.get(d);
+            current.valorPago += Number(p.valorPago);
+        });
+
+        while (currentDate <= dataVencimento) {
+            const dateStr = currentDate.toISOString().split('T')[0];
+            const pagouHoje = pagamentosMap.get(dateStr);
+            const isPast = currentDate < hoje;
+            const isToday = currentDate.getTime() === hoje.getTime();
+
+            let diaInfo = {
+                data: dateStr,
+                status: '',
+                valor: 0,
+                cor: ''
+            };
+
+            if (pagouHoje) {
+                diaInfo.valor = pagouHoje.valorPago;
+                diaInfo.status = 'PAGO';
+                diaInfo.cor = 'verde';
+                if (Number(pagouHoje.valorPago) === 0) {
+                    // Caso raro onde existe registro mas valor é 0
+                    diaInfo.status = isPast ? 'ATRASADO' : 'PENDENTE';
+                    diaInfo.cor = isPast ? 'vermelho' : 'cinza';
+                }
+            } else if (isPast) {
+                diaInfo.status = 'ATRASADO';
+                diaInfo.valor = 0;
+                diaInfo.cor = 'vermelho';
+            } else if (isToday) {
+                diaInfo.status = 'HOJE';
+                diaInfo.valor = Number(valorSugeridoDiario.toFixed(2));
+                diaInfo.cor = 'azul';
+            } else {
+                diaInfo.status = 'FUTURO';
+                diaInfo.valor = Number(valorSugeridoDiario.toFixed(2));
+                diaInfo.cor = 'cinza';
+            }
+
+            if (saldoDevedor <= 0 && !isPast && !pagouHoje) {
+                diaInfo.status = 'ISENTO';
+                diaInfo.valor = 0;
+                diaInfo.cor = 'verde-claro';
+            }
+
+            calendario.push(diaInfo);
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
+
+        return {
+            sucesso: true,
+            resumo: {
+                diasRestantes: diasRestantes,
+                saldoDevedor: Number(saldoDevedor.toFixed(2)),
+                valorTotal: Number(valorTotalComPenalizacoes.toFixed(2))
+            },
+            calendario
+        };
+    }
+
     async create(createPagamentoDto: CreatePagamentoDto) {
         const emprestimo = await this.emprestimoRepository.findOne({
             where: { emprestimoId: createPagamentoDto.emprestimoId },
